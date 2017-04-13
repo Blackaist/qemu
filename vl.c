@@ -126,6 +126,7 @@ int main(int argc, char **argv)
 #define MAX_VIRTIO_CONSOLES 1
 #define MAX_SCLP_CONSOLES 1
 
+char *log_filename_global;
 static const char *data_dir[16];
 static int data_dir_idx;
 const char *bios_name = NULL;
@@ -4055,8 +4056,9 @@ int main(int argc, char **argv, char **envp)
 
     /* Open the logfile at this point and set the log mask if necessary.
      */
+
     if (log_file) {
-        qemu_set_log_filename(log_file, &error_fatal);
+        qemu_set_log_filename(log_file, &error_fatal);	
     }
 
     if (log_mask) {

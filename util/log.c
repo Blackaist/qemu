@@ -269,6 +269,8 @@ const QEMULogItem qemu_log_items[] = {
       "non-existent register)" },
     { CPU_LOG_PAGE, "page",
       "dump pages at beginning of user mode emulation" },
+	{ CPU_LOG_FIND_SECTOR, "find_sector",
+      "show log when disk using for write/read" },
     { CPU_LOG_TB_NOCHAIN, "nochain",
       "do not chain compiled TBs so that \"exec\" and \"cpu\" show\n"
       "complete traces" },
