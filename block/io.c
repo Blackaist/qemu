@@ -2811,7 +2811,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
     if ( strcmp(bs->filename, "qemu.img") == 0 )
 		return;
 
-	FILE *fp = fopen("/home/blackstork/qemu/build/bin/raw_fat.img", "rb");
+	FILE *fp = fopen(bs->filename, "rb");
 
 	if( fp == NULL )
 	{
