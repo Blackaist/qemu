@@ -32,6 +32,7 @@
 #include "qemu/error-report.h"
 
 #include <stdio.h>
+#include <wctype.h>
 
 
 #define NOT_DONE 0x7fffffff /* used while emulated sync operation in progress */
@@ -2806,10 +2807,10 @@ struct directoryRecord{
 int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read)
 {
 
-	if(!qemu_loglevel_mask(CPU_LOG_FIND_SECTOR)) return;
+	if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) ) return 2;
 
     if ( strcmp(bs->filename, "qemu.img") == 0 )
-		return;
+		return 2;
 
 	FILE *fp = fopen(bs->filename, "rb");
 
@@ -2826,22 +2827,22 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
 		qemu_log("write	%s : ", bs->filename);
 	
     unsigned char sector[512];
-    unsigned char buf[4], fileName[64], directory[256];
+    unsigned char buf[4], directory[256]; //fileName[64]
     wchar_t bigBuf;
     unsigned long partition[4], offset[4];
     unsigned long sum = 0;
     struct directoryRecord dirRec;
-    unsigned long BPB_BytsPerSec, BPB_SecPerClus, BPB_RsvdSecCnt, BPB_NumFATs, BPB_RootEntCnt, BPB_TotSec32, BPB_FATSz32, BPB_RootClus;
-    char ATTR_READ_ONLY, ATTR_HIDDEN, ATTR_SYSTEM, ATTR_VOLUME_ID, ATTR_DIRECTORY, ATTR_ARCHIVE;
+    unsigned long BPB_BytsPerSec, BPB_RsvdSecCnt, BPB_NumFATs, BPB_RootEntCnt, BPB_FATSz32;//BPB_SecPerClus, BPB_TotSec32, BPB_RootClus;
+    char ATTR_VOLUME_ID, ATTR_DIRECTORY;// ATTR_READ_ONLY, ATTR_HIDDEN, ATTR_SYSTEM, ATTR_ARCHIVE;
 
     int i;
     fread(&sector, sizeof(sector), 1, fp);
 
     for(i = 0; i < 4; i++){
-        sprintf(buf, "%02x%02x%02x%02x", sector[457 + i * 16], sector[456 + i * 16], sector[455 + i * 16], sector[454 + i * 16]);
-        offset[i] = strtol(buf, NULL, 16);
-        sprintf(buf, "%02x%02x%02x%02x", sector[461 + i * 16], sector[460 + i * 16], sector[459 + i * 16], sector[458 + i * 16]);
-        partition[i] = strtol(buf, NULL, 16);
+        sprintf( (char*) buf, "%02x%02x%02x%02x", sector[457 + i * 16], sector[456 + i * 16], sector[455 + i * 16], sector[454 + i * 16] );
+        offset[i] = strtol( (char*) buf, NULL, 16);
+        sprintf( (char*) buf, "%02x%02x%02x%02x", sector[461 + i * 16], sector[460 + i * 16], sector[459 + i * 16], sector[458 + i * 16]);
+        partition[i] = strtol( (char*) buf, NULL, 16);
         //printf("%d - %d sectors\n", offset[i], partition[i]);
     }
 	
@@ -2859,24 +2860,24 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
             break;
         }
     }
-    qemu_log("%d -> partition %d: ", sector_num, i);
+    qemu_log("%ld -> partition %d: ", sector_num, i);
 
     fread(&sector, sizeof(sector), 1, fp);
 
     BPB_BytsPerSec = (sector[12] << 8) | sector[11];
-    BPB_SecPerClus = sector[13];
+    //BPB_SecPerClus = sector[13];
     BPB_RsvdSecCnt = (sector[15] << 8) | sector[14]; //Number of reserved sectors
     BPB_NumFATs    = sector[16];
     BPB_RootEntCnt = (sector[18] << 8) | sector[17];
-    BPB_TotSec32   = (sector[35] << 24) | (sector[34] << 16) | (sector[33] << 8) | sector[32];
+    //BPB_TotSec32   = (sector[35] << 24) | (sector[34] << 16) | (sector[33] << 8) | sector[32];
     BPB_FATSz32    = (sector[39] << 24) | (sector[38] << 16) | (sector[37] << 8) | sector[36];
-    BPB_RootClus   = (sector[47] << 24) | (sector[46] << 16) | (sector[45] << 8) | sector[44];
+    //BPB_RootClus   = (sector[47] << 24) | (sector[46] << 16) | (sector[45] << 8) | sector[44];
 
     const unsigned long byteFatTable = BPB_BytsPerSec * (BPB_RsvdSecCnt + offset[i - 1]);
-    unsigned long RootDirSectors, FirstDataSector, DataSec;
+    unsigned long RootDirSectors, FirstDataSector;// DataSec;
     RootDirSectors = ((BPB_RootEntCnt * 32) + (BPB_BytsPerSec - 1)) / BPB_BytsPerSec;
     FirstDataSector = BPB_RsvdSecCnt + (BPB_NumFATs * BPB_FATSz32) + RootDirSectors + offset[i - 1];
-    DataSec = BPB_TotSec32 - (BPB_RsvdSecCnt + (BPB_NumFATs * BPB_FATSz32) + RootDirSectors);
+    //DataSec = BPB_TotSec32 - (BPB_RsvdSecCnt + (BPB_NumFATs * BPB_FATSz32) + RootDirSectors);
 
   //  printf("\n%d %d %d %d %d %d %d %d\n", BPB_BytsPerSec, BPB_SecPerClus, BPB_RsvdSecCnt, BPB_NumFATs, BPB_RootEntCnt, BPB_TotSec32, BPB_FATSz32, BPB_RootClus);
   // printf("%d %d %d %d \n", RootDirSectors, byteFatTable, FirstDataSector, DataSec);
@@ -2895,7 +2896,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
             longName = 1;
             unsigned char j = 0x40;
             j = *(unsigned char*)(sector + fileOffset[fileOffsetI] + 1) - j;
-            if(j == 0xE5 || *(unsigned char*)(sector + fileOffset[fileOffsetI] + 33) == *(unsigned char*)(sector + fileOffset[fileOffsetI] + 1) && ((int)j > 18)){
+            if (j == 0xE5 || (*(unsigned char*)(sector + fileOffset[fileOffsetI] + 33) == *(unsigned char*)(sector + fileOffset[fileOffsetI] + 1) && (int)j > 18) ){
                 for(i = 0; i < 18; i++){
                     fileOffset[fileOffsetI] = fileOffset[fileOffsetI] + 32;
                     if(*(unsigned char*)(sector + fileOffset[fileOffsetI] + 1) - 0x40 <= 0x18){
@@ -2912,21 +2913,21 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                 for(i = 1; i < 11; i += 2){
                     bigBuf = *(wchar_t*)(sector + fileOffset[fileOffsetI] - 32 * (int)k + i + 1);
                     if(bigBuf != 0xFFFF && bigBuf != 0x0000)
-                        directory[currentOffset++] = (char*)bigBuf;
+                        directory[currentOffset++] = (char)bigBuf;
                 }
                 if( *(unsigned char*)(sector + fileOffset[fileOffsetI] - 32 * (int)k + i + 1) != 0x0f)
                     break;
                 for(i += 3; i < 26; i += 2){
                     bigBuf = *(wchar_t*)(sector + fileOffset[fileOffsetI] - 32 * (int)k + i + 1);
                     if(bigBuf != 0xFFFF && bigBuf != 0x0000)
-                        directory[currentOffset++] = (char*)bigBuf;
+                        directory[currentOffset++] = (char)bigBuf;
                 }
                 if( *(unsigned char*)(sector + fileOffset[fileOffsetI] - 32 * (int)k + i + 1) != 0x00)
                     break;
                 for(i += 2; i < 32; i += 2){
                     bigBuf = *(wchar_t*)(sector + fileOffset[fileOffsetI] - 32 * (int)k + i + 1);
                     if(bigBuf != 0xFFFF && bigBuf != 0x0000)
-                        directory[currentOffset++] = (char*)bigBuf;
+                        directory[currentOffset++] = (char)bigBuf;
                 }
             }
         }
@@ -2958,15 +2959,15 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
             dirRec.DIR_Name[9] = *(unsigned char*)(sector + fileOffset[fileOffsetI] + 10);
             dirRec.DIR_Name[10]= *(unsigned char*)(sector + fileOffset[fileOffsetI] + 11);
             dirRec.DIR_Attr    = *((unsigned short*)(sector + fileOffset[fileOffsetI] + 12));
-            sprintf(buf, "%02x%02x%02x%02x", sector[fileOffset[fileOffsetI] + 22], sector[fileOffset[fileOffsetI] + 21], sector[fileOffset[fileOffsetI] + 28], sector[fileOffset[fileOffsetI] + 27]);
-            dirRec.DIR_FstClus = strtol(buf, NULL, 16);
+            sprintf( (char*) buf, "%02x%02x%02x%02x", sector[fileOffset[fileOffsetI] + 22], sector[fileOffset[fileOffsetI] + 21], sector[fileOffset[fileOffsetI] + 28], sector[fileOffset[fileOffsetI] + 27]);
+            dirRec.DIR_FstClus = strtol( (char*) buf, NULL, 16);
             dirRec.DIR_FileSize =  *((unsigned int*)(sector + fileOffset[fileOffsetI] + 29));
-            ATTR_READ_ONLY = dirRec.DIR_Attr & 0x01;
-            ATTR_HIDDEN =    dirRec.DIR_Attr & 0x02;
-            ATTR_SYSTEM =    dirRec.DIR_Attr & 0x04;
+            //ATTR_READ_ONLY = dirRec.DIR_Attr & 0x01;
+            //ATTR_HIDDEN =    dirRec.DIR_Attr & 0x02;
+            //ATTR_SYSTEM =    dirRec.DIR_Attr & 0x04;
             ATTR_VOLUME_ID = dirRec.DIR_Attr & 0x08;
             ATTR_DIRECTORY = dirRec.DIR_Attr & 0x10;
-            ATTR_ARCHIVE =   dirRec.DIR_Attr & 0x20;
+            //ATTR_ARCHIVE =   dirRec.DIR_Attr & 0x20;
 
            // printf("\n%s %d %d %d\n", dirRec.DIR_Name, dirRec.DIR_Attr, dirRec.DIR_FstClus, dirRec.DIR_FileSize);
            // printf("%d %d %d %d %d %d\n", ATTR_READ_ONLY, ATTR_HIDDEN, ATTR_SYSTEM ,ATTR_VOLUME_ID, ATTR_DIRECTORY, ATTR_ARCHIVE);
@@ -3005,7 +3006,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                                 dirRec.DIR_Name[longName] = '\0';
                                 directory[currentOffset] = '/';
                                 directory[currentOffset + 1] = '\0';
-                                strcat(directory, dirRec.DIR_Name);
+                                strcat( (char*) directory, (const char*) dirRec.DIR_Name);
                             }
                             else directory[currentOffset] = '\0';
                             qemu_log("%s\n", directory);
@@ -3026,8 +3027,8 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                   // printf("%d\n",FirstDataSector * BPB_BytsPerSec + dirRec.DIR_FstClus * 512 - BPB_BytsPerSec * i);
                     fseek(fp, FirstDataSector * BPB_BytsPerSec + dirRec.DIR_FstClus * 512 - BPB_BytsPerSec * i, SEEK_SET);
                     fread(&sector, sizeof(sector), 1, fp);
-                    sprintf(buf, "%02x%02x%02x%02x", sector[21], sector[20], sector[27], sector[26]);
-                    unsigned int fstClus = strtol(buf, NULL, 16);
+                    sprintf( (char*) buf, "%02x%02x%02x%02x", sector[21], sector[20], sector[27], sector[26]);
+                    unsigned int fstClus = strtol( (char*) buf, NULL, 16);
                     if(fstClus == dirRec.DIR_FstClus){
                         fileOffsetI++;
                         lastOffset[fileOffsetI] = currentOffset;
