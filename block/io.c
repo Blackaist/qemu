@@ -1095,7 +1095,7 @@ int coroutine_fn bdrv_co_preadv(BdrvChild *child,
     bool use_local_qiov = false;
     int ret;
 
-	get_filename_from_sector(child->bs, offset >> BDRV_SECTOR_BITS, true);
+    get_filename_from_sector(child->bs, offset >> BDRV_SECTOR_BITS, true);
 
     if (!drv) {
         return -ENOMEDIUM;
@@ -1478,7 +1478,7 @@ int coroutine_fn bdrv_co_pwritev(BdrvChild *child,
     bool use_local_qiov = false;
     int ret;
 
-	get_filename_from_sector(child->bs, offset >> BDRV_SECTOR_BITS, false);
+    get_filename_from_sector(child->bs, offset >> BDRV_SECTOR_BITS, false);
 
     if (!bs->drv) {
         return -ENOMEDIUM;
@@ -2806,25 +2806,25 @@ struct directoryRecord{
 
 int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read)
 {
-
-	if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) ) return 2;
+    if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) ) 
+	return 2;
 
     if ( strcmp(bs->filename, "qemu.img") == 0 )
-		return 2;
+	return 2;
 
-	FILE *fp = fopen(bs->filename, "rb");
+    FILE *fp = fopen(bs->filename, "rb");
 
-	if( fp == NULL )
-	{
+    if( fp == NULL )
+    {
         qemu_log("We cant open the file\n");
-		fclose(fp);
+	fclose(fp);
         return 2;
     }
 	
-	if (read)
-		qemu_log("read	%s : ", bs->filename);
-	else
-		qemu_log("write	%s : ", bs->filename);
+    if (read)
+	    qemu_log("read	%s : ", bs->filename);
+    else
+	    qemu_log("write	%s : ", bs->filename);
 	
     unsigned char sector[512];
     unsigned char buf[4], directory[256]; //fileName[64]
@@ -2848,19 +2848,23 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
 	
 	sum = offset[0];
 
-    for(i = 1; i <= 5; i++){
-        if( i == 5 ){
+    for(i = 1; i <= 5; i++)
+    {
+        if( i == 5 )
+	{
             qemu_log("This sector doesn't exist!\n");
 			fclose(fp);
             return 3;
         }
-        if ( sector_num <= (sum = partition[i - 1] + sum) && sector_num >= offset[i - 1] ){
-        //    printf("partition %d:", i);
+        if ( sector_num <= (sum = partition[i - 1] + sum) && sector_num >= offset[i - 1] )
+	{
+            if( sector[(i - 1) * 32 + 450] != 0x0b && sector[(i - 1) * 32 + 450] != 0x0c )
+                return 3;
             fseek(fp, 512 * offset[i - 1], SEEK_SET);
             break;
         }
     }
-    qemu_log("%ld -> partition %d: ", sector_num, i);
+    qemu_log("%"PRIu64" -> partition %d: ", sector_num, i);
 
     fread(&sector, sizeof(sector), 1, fp);
 
