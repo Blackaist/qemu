@@ -2796,7 +2796,8 @@ void bdrv_io_unplugged_end(BlockDriverState *bs)
     }
 }
 
-struct directoryRecord{
+struct directoryRecord
+{
     unsigned char DIR_Name[11];
     unsigned short DIR_Attr;
     unsigned int DIR_FstClus;
@@ -2806,7 +2807,8 @@ struct directoryRecord{
 
 int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read)
 {
-    if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) || !( sector_num >= 0 ) ) 
+    if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) || !( sector_num >= 0 ) 
+				|| strcmp(qdict_get_try_str(bs->options, "driver"), "raw")) 
 		return 2;
 
     FILE *fp = fopen(bs->filename, "rb");
@@ -2818,11 +2820,11 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
         return 2;
     }
 	
-    if ( read )
-	    qemu_log("read	%s : ", bs->filename);
-    else
-	    qemu_log("write	%s : ", bs->filename);
-	
+	if ( read )
+    	qemu_log("%s read	%s : ", bs->drv->format_name ,bs->filename);
+	else
+		qemu_log("%s write	%s : ", bs->drv->format_name ,bs->filename);
+
     unsigned char sector[512];
     unsigned char buf[4], directory[256]; //fileName[64]
     wchar_t bigBuf;
@@ -2851,13 +2853,14 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
         if( i == 5 )
 		{
             qemu_log("%"PRIu64" -> This sector doesn't exist!\n", sector_num);
-			fclose(fp);
+	    	fclose(fp);
             return 3;
         }
         if ( sector_num <= (sum = partition[i - 1] + sum) && sector_num >= offset[i - 1] )
 		{
             if( sector[(i - 1) * 16 + 450] != 0x0b && sector[(i - 1) * 16 + 450] != 0x0c )
             {
+                qemu_log("%"PRIu64" -> FAT32 error!\n", sector_num);
             	fclose(fp);
                 return 3;
             }
@@ -2865,6 +2868,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
             break;
         }
     }
+	    
     qemu_log("%"PRIu64" -> partition %d: ", sector_num, i);
 
     fread(&sector, sizeof(sector), 1, fp);
@@ -2924,7 +2928,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
             {
                 longName = 0;
             }
-            if ( longName == 1 )
+            if ( longName )
             {
             	fileOffset[fileOffsetI] = (fileOffset[fileOffsetI] + 32 * (int) j) % BPB_BytsPerSec;
 		        int k = 0;
@@ -3014,7 +3018,6 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
 
            //  if (((LDIR_attr & ATTR_LONG_NAME_MASK) != ATTR_LONG_NAME) && (LDIR_Ord != 0xE5))
            // {
-            i = 0;
             while ( 1 )
             {
                 if ((dirRec.DIR_Attr & (ATTR_DIRECTORY | ATTR_VOLUME_ID)) == 0x00)
@@ -3022,11 +3025,11 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                    // printf("\n/%s", dirRec.DIR_Name); //Found a file.
                     int tableOffset = dirRec.DIR_FstClus;
                     int nSector = dirRec.DIR_FstClus + FirstDataSector - 2;
-                    
+
                     //printf("\nTB: %d", nSector);
                     fseek(fp, byteFatTable, SEEK_SET);
                     fread(&sector, sizeof(sector), 1, fp);
-                    while ( nSector <= (dirRec.DIR_FileSize / BPB_BytsPerSec + FirstDataSector + dirRec.DIR_FstClus - 3) )
+                    do
                     {
                         if(tableOffset * 4 >= BPB_BytsPerSec)
                         {
@@ -3056,13 +3059,14 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                             }
                             else 
                             	directory[currentOffset] = '\0';
+							
                             qemu_log("%s\n", directory);
                             getFile = 1;
                             break;
                         }
                         tableOffset = sector[4 * tableOffset];
                         nSector++;
-                    }
+                    } while ( nSector <= (dirRec.DIR_FileSize / BPB_BytsPerSec + FirstDataSector + dirRec.DIR_FstClus - 3) );
                   //  printf("\nSector: %d\n", nSector);
                     fileOffset[fileOffsetI] = fileOffset[fileOffsetI] + 32;
                     currentOffset = lastOffset[fileOffsetI];
@@ -3072,20 +3076,21 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                 {
                   // printf("\n/%s", dirRec.DIR_Name); //Found a directory.
                   // printf("%d\n",FirstDataSector * BPB_BytsPerSec + dirRec.DIR_FstClus * 512 - BPB_BytsPerSec * i);
-                    fseek(fp, FirstDataSector * BPB_BytsPerSec + dirRec.DIR_FstClus * 512 - BPB_BytsPerSec * i, SEEK_SET);
+                    fseek(fp, (FirstDataSector + dirRec.DIR_FstClus - 2) * BPB_BytsPerSec, SEEK_SET);
                     fread(&sector, sizeof(sector), 1, fp);
                     sprintf( (char*) buf, "%02x%02x%02x%02x", sector[21], sector[20], sector[27], sector[26]);
                     unsigned int fstClus = strtol( (char*) buf, NULL, 16);
                     if( fstClus == dirRec.DIR_FstClus )
                     {
+						fileOffset[fileOffsetI] = fileOffset[fileOffsetI] + 32;
                         fileOffsetI++;
                         lastOffset[fileOffsetI] = currentOffset;
-                        dirOffset[fileOffsetI] =  (dirRec.DIR_FstClus - i) * BPB_BytsPerSec;
+                        dirOffset[fileOffsetI] =  (dirRec.DIR_FstClus - 2) * BPB_BytsPerSec;
                         fileOffset[fileOffsetI] = 63;
-                        fileOffset[fileOffsetI - 1] = fileOffset[fileOffsetI - 1] + 32;
-                        break;
                     }
-                    i++;
+                   	else
+						fileOffset[fileOffsetI] = fileOffset[fileOffsetI] + 32;
+					break;
                 }
                 else if ((dirRec.DIR_Attr & (ATTR_DIRECTORY | ATTR_VOLUME_ID)) == ATTR_VOLUME_ID){
                     //printf("\Volume label"); //Found a volume label.
