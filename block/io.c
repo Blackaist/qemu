@@ -3047,7 +3047,7 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                             getFile = 1; //founded
                             break;
                         }
-                        tableOffset = sector[(4 * tableOffset) * BPB_BytsPerSec];
+                        tableOffset = sector[(4 * tableOffset) % BPB_BytsPerSec];
                         nSector++;
                     } while ( nSector <= (dirRec.DIR_FileSize / BPB_BytsPerSec + FirstDataSector + dirRec.DIR_FstClus - 3) );
 
