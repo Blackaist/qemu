@@ -2808,7 +2808,7 @@ struct directoryRecord
 int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read)
 {
     if( !qemu_loglevel_mask(CPU_LOG_FIND_SECTOR) || !( sector_num >= 0 ) 
-				|| strcmp(qdict_get_try_str(bs->options, "driver"), "raw") || !strcmp(bs->filename, "qemu.img")) 
+				|| strcmp(qdict_get_try_str(bs->options, "driver"), "raw")) 
 		return 2;
 
     FILE *fp = fopen(bs->filename, "rb");
@@ -3070,7 +3070,10 @@ int get_filename_from_sector(BlockDriverState *bs, int64_t sector_num, bool read
                         fileOffset[fileOffsetI] = 63;
                     }
                    	else
+					{
 						fileOffset[fileOffsetI] = fileOffset[fileOffsetI] + 32;
+						currentOffset = lastOffset[fileOffsetI];
+					}
 					break;
                 }
                 else if ((dirRec.DIR_Attr & (ATTR_DIRECTORY | ATTR_VOLUME_ID)) == ATTR_VOLUME_ID){
